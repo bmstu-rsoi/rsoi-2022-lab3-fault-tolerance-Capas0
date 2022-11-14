@@ -14,7 +14,78 @@ services:
     ports:
       - "5432:5432"
 
-# TODO добавить сервисы
+  gateway:
+    image: rsoi-2022-lab3-gateway
+    build:
+      dockerfile: docker/gateway/Dockerfile
+      context: .
+    volumes:
+      - ./src/gateway/:/app/
+    environment:
+      PORT: 8080
+      FLASK_APP: '__init__'
+      APP_FOLDER: "/app"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - library
+      - rating
+      - reservation
+    restart: always
+
+  library:
+    image: rsoi-2022-lab3-library
+    build:
+      dockerfile: docker/library/Dockerfile
+      context: .
+    volumes:
+      - ./src/library/:/app/
+    environment:
+      PORT: 8060
+      FLASK_APP: '__init__'
+      APP_FOLDER: "/app"
+      DATABASE_URL: "postgresql://program:test@postgres:5432/libraries"
+    ports:
+      - "8060:8060"
+    depends_on:
+      - postgres
+    restart: always
+
+  rating:
+    image: rsoi-2022-lab3-rating
+    build:
+      dockerfile: docker/rating/Dockerfile
+      context: .
+    volumes:
+      - ./src/rating/:/app/
+    environment:
+      PORT: 8050
+      FLASK_APP: '__init__'
+      APP_FOLDER: "/app"
+      DATABASE_URL: "postgresql://program:test@postgres:5432/ratings"
+    ports:
+      - "8050:8050"
+    depends_on:
+      - postgres
+    restart: always
+
+  reservation:
+    image: rsoi-2022-lab3-reservation
+    build:
+      dockerfile: docker/reservation/Dockerfile
+      context: .
+    volumes:
+      - ./src/reservation/:/app/
+    environment:
+      PORT: 8070
+      FLASK_APP: '__init__'
+      APP_FOLDER: "/app"
+      DATABASE_URL: "postgresql://program:test@postgres:5432/reservations"
+    ports:
+      - "8070:8070"
+    depends_on:
+      - postgres
+    restart: always
 
 volumes:
   db-data:
