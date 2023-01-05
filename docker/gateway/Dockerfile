@@ -21,4 +21,4 @@ COPY --chown=$APP_USER:$APP_USER src/gateway/ $APP_HOME/
 USER $APP_USER
 
 # run app
-CMD gunicorn --bind 0.0.0.0:$PORT manage:app
+CMD gunicorn --worker-class gevent --bind 0.0.0.0:$PORT manage:app
