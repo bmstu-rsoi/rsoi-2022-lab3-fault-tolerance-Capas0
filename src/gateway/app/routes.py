@@ -85,19 +85,33 @@ def take_book():
                 'errors': []
             })
 
+        response = connector.post(f'{Services.reservation.api}/reservations', session=session, json=request.json)
+        if not response.is_valid:
+            return response.value
+        else:
+            response = response.value
+        if response.status_code != 201:
+            return jsonify(response.json()), response.status_code
+
+        reservation = fill_reservation(response.json())
+        reservation['rating'] = {'stars': stars}
+
         args = request.json
         library_uid = args['libraryUid']
         book_uid = args['bookUid']
-        r = session.patch(f"{Services.library.api}/libraries/{library_uid}/books/{book_uid}", json={'availableCount': 0})
-        if r.status_code != 200:
-            return jsonify(r.json()), r.status_code
+        response = connector.patch(
+            f"{Services.library.api}/libraries/{library_uid}/books/{book_uid}",
+            session=session,
+            json={'availableCount': 0}
+        )
+        if not response.is_valid or response.value.status_code != 200:
+            reservation_uid = reservation['reservationUid']
+            connector.delete(f'{Services.reservation.api}/reservations/{reservation_uid}', session=session)
 
-        r = session.post(f'{Services.reservation.api}/reservations', json=request.json)
-        if r.status_code != 201:
-            return jsonify(r.json()), r.status_code
-
-        reservation = fill_reservation(r.json())
-        reservation['rating'] = {'stars': stars}
+            if response.is_valid:
+                return jsonify(response.value.json()), response.value.status_code
+            else:
+                return response.value
 
     return jsonify(reservation)
 

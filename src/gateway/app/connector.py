@@ -93,3 +93,11 @@ class NetworkConnector:
             return requests.post(url, **kwargs)
         else:
             return session.post(url, **kwargs)
+
+    @staticmethod
+    @check_fall
+    def delete(url: str, session=None, **kwargs):
+        if session is None:
+            return requests.delete(url, **kwargs)
+        else:
+            return session.delete(url, **kwargs)

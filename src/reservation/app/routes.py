@@ -69,3 +69,17 @@ def return_book(reservation_uid):
     db.session.commit()
 
     return jsonify(ReservationSchema().dump(reservation)), 200
+
+
+@api.route('reservations/<reservation_uid>', methods=['DELETE'])
+def revoke_reservation(reservation_uid):
+    username = request.headers.get('X-User-Name')
+    try:
+        db.session.execute(
+            db.delete(Reservation)
+            .where(Reservation.username == username, Reservation.reservation_uid == reservation_uid)
+        )
+    except DataError:
+        return jsonify({'message': f'Reservation with UID "{reservation_uid}"not found'}), 404
+
+    return 'Deleted', 200
