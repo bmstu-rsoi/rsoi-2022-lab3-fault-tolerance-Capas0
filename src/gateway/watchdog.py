@@ -32,7 +32,7 @@ def fallback_watchdog():
 def repeat_watchdog():
     with app.app_context():
         while True:
-            func = failed_requests.get_nowait()
+            func = failed_requests.get()
             if not func():
                 failed_requests.put(func)
                 sleep(WATCHDOG_INTERVAL)
