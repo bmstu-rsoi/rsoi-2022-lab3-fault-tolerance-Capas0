@@ -1,3 +1,5 @@
+from queue import Queue
+
 import requests
 from flask import Blueprint, request, jsonify
 
@@ -6,6 +8,7 @@ from .connector import NetworkConnector, Services
 api = Blueprint('api', __name__)
 
 connector = NetworkConnector()
+failed_requests = Queue(maxsize=10000)
 
 
 @api.route('/libraries', methods=['GET'])
@@ -28,7 +31,7 @@ def get_library_books(library_uid):
 
 @api.route('/rating', methods=['GET'])
 def get_rating():
-    response = connector.get(f'{Services.rating.api}/rating')
+    response = connector.get(f'{Services.rating.api}/rating', headers=dict(request.headers))
     if not response.is_valid:
         return response.value
 
@@ -116,38 +119,61 @@ def take_book():
     return jsonify(reservation)
 
 
+def change_rating(rating_delta, headers):
+    response = connector.get(f'{Services.rating.api}/rating', headers=headers)
+    if not response.is_valid:
+        return False
+
+    rating = response.value.json()
+    rating['stars'] += rating_delta
+
+    response = connector.patch(f'{Services.rating.api}/rating', json=rating, headers=headers)
+    return response.is_valid
+
+
 @api.route('reservations/<reservation_uid>/return', methods=['POST'])
 def return_book(reservation_uid):
-    with requests.Session() as session:
-        session.headers.update(request.headers)
+    response = connector.post(
+        f'{Services.reservation.api}/reservations/{reservation_uid}/return',
+        headers=dict(request.headers),
+        json={'date': request.json['date']}
+    )
+    if not response.is_valid:
+        return response.value
+    else:
+        response = response.value
+    if response.status_code != 200:
+        return jsonify(response.json()), response.status_code
 
-        r = session.post(
-            f'{Services.reservation.api}/reservations/{reservation_uid}/return',
-            json={'date': request.json['date']}
-        )
-        if r.status_code != 200:
-            return jsonify(r.json()), r.status_code
+    reservation = fill_reservation(response.json())
+    library_uid = reservation['library']['libraryUid']
+    book_uid = reservation['book']['bookUid']
 
-        reservation = fill_reservation(r.json())
-        library_uid = reservation['library']['libraryUid']
-        book_uid = reservation['book']['bookUid']
+    request_data = {
+        'url': f'{Services.library.api}/libraries/{library_uid}/books/{book_uid}',
+        'headers': dict(request.headers),
+        'json': {'availableCount': 1, 'condition': request.json['condition']}
+    }
 
-        rating_delta = 0
-        if reservation['status'] == 'EXPIRED':
-            rating_delta -= 10
-        if reservation['book']['condition'] != request.json['condition']:
-            rating_delta -= 10
-        if rating_delta == 0:
-            rating_delta = 1
+    response = connector.patch(**request_data)
 
-        session.patch(
-            f'{Services.library.api}/libraries/{library_uid}/books/{book_uid}',
-            json={'availableCount': 1, 'condition': request.json['condition']}
-        )
+    if not response.is_valid:
+        failed_requests.put(lambda: connector.patch(**request_data).is_valid)
 
-        rating = session.get(f'{Services.rating.api}/rating').json()
-        rating['stars'] += rating_delta
+    rating_delta = 0
+    if reservation['status'] == 'EXPIRED':
+        rating_delta -= 10
+    if reservation['book']['condition'] != request.json['condition']:
+        rating_delta -= 10
+    if rating_delta == 0:
+        rating_delta = 1
 
-        session.patch(f'{Services.rating.api}/rating', json=rating)
+    rating_request_data = {
+        'rating_delta':  rating_delta,
+        'headers': dict(request.headers)
+    }
+
+    if not change_rating(**rating_request_data):
+        failed_requests.put(lambda: change_rating(**rating_request_data))
 
     return '', 204

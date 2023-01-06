@@ -1,5 +1,5 @@
 from .base import app
-from .routes import api
+from .routes import api, failed_requests
 from .connector import Services, fallback, MAX_FAILS
 from flask import jsonify
 

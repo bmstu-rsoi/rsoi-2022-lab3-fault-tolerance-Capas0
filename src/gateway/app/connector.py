@@ -4,7 +4,7 @@ from typing import Union
 
 import requests
 from requests.exceptions import ConnectionError
-from flask import current_app
+from flask import current_app, jsonify
 
 reservation_api = 'http://reservation:8070/api/v1'
 library_api = 'http://library:8060/api/v1'
@@ -61,9 +61,12 @@ def check_fall(func):
                 return ResponseWrapper(is_valid=True, value=response)
             except ConnectionError:
                 fallback[service] += 1
-                current_app.logger.warning(f'{service.value} Service is unavailable')
+                current_app.logger.warning(f'{service.value} Service unavailable')
 
-        return ResponseWrapper(is_valid=False, value=(f'{service.value} Service is unavailable', 500))
+        return ResponseWrapper(
+            is_valid=False,
+            value=(jsonify(message=f'{service.value} Service unavailable'), 503)
+        )
 
     return wrapper
 
